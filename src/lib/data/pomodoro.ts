@@ -1,22 +1,13 @@
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import type { PomodoroSession } from '@/types';
 
 export async function fetchPomodoroSessions(): Promise<PomodoroSession[]> {
-  const { data, error } = await supabase
-    .from('pomodoro_sessions')
-    .select('*')
-    .order('completed_at', { ascending: false })
-    .limit(50);
-  if (error) throw error;
-  return data ?? [];
+  return api<PomodoroSession[]>('pomodoro');
 }
 
 export async function logPomodoroSession(
   type: PomodoroSession['type'],
   durationMinutes: number
 ): Promise<void> {
-  const { error } = await supabase
-    .from('pomodoro_sessions')
-    .insert({ type, duration_minutes: durationMinutes });
-  if (error) throw error;
+  await api('pomodoro', { method: 'POST', json: { type, duration_minutes: durationMinutes } });
 }

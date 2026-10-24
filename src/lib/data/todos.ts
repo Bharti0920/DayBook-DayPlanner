@@ -1,36 +1,23 @@
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import type { Todo } from '@/types';
 
 export async function fetchTodos(): Promise<Todo[]> {
-  const { data, error } = await supabase
-    .from('todos')
-    .select('*')
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+  return api<Todo[]>('todos');
 }
 
 export async function createTodo(
   payload: Pick<Todo, 'title' | 'priority' | 'due_date'>
 ): Promise<Todo> {
-  const { data, error } = await supabase
-    .from('todos')
-    .insert({ title: payload.title, priority: payload.priority, due_date: payload.due_date })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  return api<Todo>('todos', { method: 'POST', json: payload });
 }
 
 export async function updateTodo(
   id: string,
   patch: Partial<Pick<Todo, 'title' | 'completed' | 'priority' | 'due_date'>>
 ): Promise<void> {
-  const { error } = await supabase.from('todos').update(patch).eq('id', id);
-  if (error) throw error;
+  await api(`todos/${id}`, { method: 'PATCH', json: patch });
 }
 
 export async function deleteTodo(id: string): Promise<void> {
-  const { error } = await supabase.from('todos').delete().eq('id', id);
-  if (error) throw error;
+  await api(`todos/${id}`, { method: 'DELETE' });
 }

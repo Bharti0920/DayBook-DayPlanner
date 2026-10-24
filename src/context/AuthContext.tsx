@@ -1,56 +1,100 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import type { Session, User } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
+import {
+  AuthError,
+  MissingIdentityError,
+  getUser,
+  handleAuthCallback,
+  login,
+  logout,
+  onAuthChange,
+  signup,
+  type User,
+} from '@netlify/identity';
 
 type AuthContextValue = {
-  session: Session | null;
   user: User | null;
   loading: boolean;
-  signUp: (email: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string) => Promise<{ error: string | null; needsConfirmation?: boolean }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+function describeError(error: unknown, fallback: string) {
+  if (error instanceof MissingIdentityError) return 'Sign-in is not available right now. Please try again later.';
+  if (error instanceof AuthError) {
+    if (error.status === 401) return 'Invalid email or password.';
+    if (error.status === 403) return 'New signups are currently disabled.';
+    return error.message;
+  }
+  return fallback;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
+    let active = true;
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-      setLoading(false);
-    });
+    (async () => {
+      try {
+        // Processes email-confirmation / recovery links that land with a token in the URL hash.
+        const result = await handleAuthCallback();
+        if (result) {
+          window.history.replaceState(null, '', `${window.location.pathname}#dashboard`);
+          window.dispatchEvent(new HashChangeEvent('hashchange'));
+        }
+      } catch (error) {
+        console.error('Auth callback failed', error);
+      }
+      const current = await getUser();
+      if (active) {
+        setUser(current);
+        setLoading(false);
+      }
+    })();
 
-    return () => sub.subscription.unsubscribe();
+    const unsubscribe = onAuthChange((_event, newUser) => setUser(newUser));
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
   const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password });
-    if (error) return { error: error.message };
-    return { error: null };
+    try {
+      const newUser = await signup(email, password);
+      if (newUser.confirmedAt) {
+        setUser(newUser);
+        return { error: null };
+      }
+      return { error: null, needsConfirmation: true };
+    } catch (error) {
+      return { error: describeError(error, 'Could not create your account.') };
+    }
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { error: error.message };
-    return { error: null };
+    try {
+      setUser(await login(email, password));
+      return { error: null };
+    } catch (error) {
+      return { error: describeError(error, 'Could not sign you in.') };
+    }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await logout();
+    } finally {
+      setUser(null);
+    }
   };
 
   return (
-    <AuthContext.Provider
-      value={{ session, user: session?.user ?? null, loading, signUp, signIn, signOut }}
-    >
+    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
