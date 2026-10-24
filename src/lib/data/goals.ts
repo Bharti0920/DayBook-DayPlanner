@@ -1,36 +1,23 @@
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/api';
 import type { Goal } from '@/types';
 
 export async function fetchGoals(): Promise<Goal[]> {
-  const { data, error } = await supabase
-    .from('goals')
-    .select('*')
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+  return api<Goal[]>('goals');
 }
 
 export async function createGoal(
   payload: Pick<Goal, 'title' | 'description' | 'target'>
 ): Promise<Goal> {
-  const { data, error } = await supabase
-    .from('goals')
-    .insert({ title: payload.title, description: payload.description, target: payload.target })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  return api<Goal>('goals', { method: 'POST', json: payload });
 }
 
 export async function updateGoal(
   id: string,
   patch: Partial<Pick<Goal, 'progress' | 'completed' | 'title' | 'target'>>
 ): Promise<void> {
-  const { error } = await supabase.from('goals').update(patch).eq('id', id);
-  if (error) throw error;
+  await api(`goals/${id}`, { method: 'PATCH', json: patch });
 }
 
 export async function deleteGoal(id: string): Promise<void> {
-  const { error } = await supabase.from('goals').delete().eq('id', id);
-  if (error) throw error;
+  await api(`goals/${id}`, { method: 'DELETE' });
 }

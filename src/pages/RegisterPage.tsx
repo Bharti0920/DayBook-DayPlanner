@@ -10,19 +10,25 @@ export function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    setNotice(null);
     if (password.length < 6) {
       setError('Password must be at least 6 characters.');
       return;
     }
     setLoading(true);
-    const { error } = await signUp(email, password);
+    const { error, needsConfirmation } = await signUp(email, password);
     setLoading(false);
     if (error) { setError(error); return; }
+    if (needsConfirmation) {
+      setNotice('Almost there — check your inbox and click the confirmation link to open your workspace.');
+      return;
+    }
     navigate('dashboard');
   };
 
@@ -63,6 +69,12 @@ export function RegisterPage() {
         {error && (
           <p className="text-sm text-[#9a4f47] bg-[#f5ebe9] border border-[#e8d0cc] rounded-xl px-4 py-3">
             {error}
+          </p>
+        )}
+
+        {notice && (
+          <p className="text-sm text-[#214f43] bg-[#e8efe9] border border-[#c9dbcf] rounded-xl px-4 py-3">
+            {notice}
           </p>
         )}
 
